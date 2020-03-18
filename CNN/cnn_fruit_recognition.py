@@ -67,12 +67,15 @@ x_test = x_test.astype(np.float32)
 x_val = x_val.astype(np.float32)
 
 #Adapt the labels to the one-hot vector syntax required by the softmax
-from keras.utils import k_utils
+from keras.utils import np_utils
 num_classes = len(set(y))
 print(f'num classes: {num_classes}')
-y_train = k_utils.to_categorical(y_train, num_classes)
-y_test = k_utils.to_categorical(y_test, num_classes)
-y_val = k_utils.to_categorical(y_val, num_classes)
+# y_train = np_utils.to_categorical(y_train, num_classes)
+# y_test = np_utils.to_categorical(y_test, num_classes)
+# y_val = np_utils.to_categorical(y_val, num_classes)
+y_train = keras.utils.to_categorical(y_train, num_classes)
+y_test = keras.utils.to_categorical(y_test, num_classes)
+y_val = keras.utils.to_categorical(y_val, num_classes)
 
 
 # Images resolution
