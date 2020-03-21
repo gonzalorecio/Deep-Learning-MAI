@@ -11,15 +11,15 @@ import sys
 print( 'Using Keras version', keras.__version__)
 
 
-# All images will  flipped, rotated up to 10º, and  shifted
+# All images will  flipped, rotated up to 20º, and  shifted
 train_datagen = ImageDataGenerator(horizontal_flip=True, 
                                    rotation_range=20, 
-                                   width_shift_range=0.1,
-                                   height_shift_range=0.1,)
+                                   width_shift_range=0.07,
+                                   height_shift_range=0.07,)
 test_datagen = ImageDataGenerator(horizontal_flip=True, 
                                   rotation_range=20, 
-                                  width_shift_range=0.1,
-                                  height_shift_range=0.1,)
+                                  width_shift_range=0.07,
+                                  height_shift_range=0.07,)
 # classes = ['Apple A', 'Apple C', 'Apple D', 'Apple E', 'Apple F', 'Banana', 'Carambola', 
 #           'Guava A', 'Guava B', 'Kiwi A', 'Kiwi B', 'Kiwi C', 'Mango', 'Muskmelon', 
 #           'Orange', 'Peach', 'Pear', 'Persimmon', 'Pitaya', 'Plum', 'Pomegranate', 'Tomatoes']
@@ -29,7 +29,7 @@ classes = sorted(classes)
 
 X, y = [], []
 c = 0  # class id
-for filename in classes: #os.listdir('fruit-recognition_reduced/')[-4:]:
+for filename in classes: 
 	# load image
         path = 'fruit-recognition_reduced/' + filename
         list_images = os.listdir(path)[:]
@@ -47,6 +47,14 @@ for filename in classes: #os.listdir('fruit-recognition_reduced/')[-4:]:
 X = np.array(X)
 y = np.array(y)
 print(set(y))
+
+# Compute class weights
+from sklearn.utils import class_weight
+class_weights = class_weight.compute_class_weight('balanced',
+                                                 np.unique(y),
+                                                 y)
+class_weights = dict(enumerate(class_weights))
+print(class_weights)
 
 # Split Train, Test and Validation sets
 x_train, x_test, y_train, y_test = train_test_split(X, y, test_size=0.10, shuffle=True)
@@ -125,7 +133,8 @@ model.add(Dense(num_classes, activation='softmax'))
 #plot_model(model, to_file='model.png', show_shapes=true)
 
 #Compile the CNN
-model.compile(optimizer='adam',loss='categorical_crossentropy',metrics=['accuracy'])
+adam = keras.optimizers.Adam(lr=0.0001, beta_1=0.9, beta_2=0.999, amsgrad=False, decay=1e-3)
+model.compile(optimizer=adam,loss='categorical_crossentropy',metrics=['accuracy'])
 
 
 #Start training
@@ -133,12 +142,13 @@ model.compile(optimizer='adam',loss='categorical_crossentropy',metrics=['accurac
 # history = model.fit_generator(x_train, y_train, batch_size=64,epochs=5, validation_split=0.2)
 es = EarlyStopping(monitor='val_loss', mode='min', verbose=1,
                    patience=15, restore_best_weights=True)
-batch_size = 64
+batch_size = 32
 history = model.fit_generator(train_datagen.flow(x_train, y_train, batch_size=batch_size), 
                               validation_data=test_datagen.flow(x_val, y_val, batch_size=batch_size),
                               validation_steps=len(x_val)/batch_size,
                               steps_per_epoch=len(x_train) / batch_size,
                               epochs=1000,
+                              class_weight=class_weights,
                               workers=2,
                               callbacks=[es])
 
