@@ -1,0 +1,27 @@
+# Data set short description and location
+
+Fruit Recognition Dataset (https://www.kaggle.com/chrisfilo/fruit-recognition)
+Fruit classification of 22 different classes (including distinguishing different 
+5 types of apples and 3 types of kiwis). Total of 44000 images.
+Classes: 'Apple A', 'Apple C', 'Apple D', 'Apple E', 'Apple F', 'Banana', 'Carambola', 
+'Guava A', 'Guava B', 'Kiwi A', 'Kiwi B', 'Kiwi C', 'Mango', 'Muskmelon', 'Orange', 
+'Peach', 'Pear', 'Persimmon', 'Pitaya', 'Plum', 'Pomegranate', 'Tomatoes'.
+
+
+
+# Train/Val/Test split percentages
+
+90% Train set and 10% Test set
+From Train set, a 10% is removed for Validation set 
+
+Train/Val/Test == 81%/9%/10% ~ 80%/10%/10%
+
+
+
+# Val/Test loss & accuracy
+
+With the best achieved model,
+validation loss: 0.1525
+validation accuracy: 0.9578
+test loss: 0.12502028124283868
+test accuracy: 0.9624937901849837
