@@ -1,4 +1,3 @@
-from tensorflow.python.client import device_lib
 from sklearn.utils import class_weight
 
 import sys
@@ -17,16 +16,14 @@ import argparse
 import time
 import json
 from sklearn.preprocessing import LabelEncoder
-from keras.layers.recurrent import GRU, SimpleRNN, LSTM
+from keras.layers.recurrent import LSTM, GRU, SimpleRNN
 from sklearn.model_selection import train_test_split
 from keras.callbacks import EarlyStopping
 from keras.layers.core import Dropout, SpatialDropout1D
 from keras import regularizers
 from keras.layers.wrappers import Bidirectional
 from keras.initializers import he_normal
-from keras import backend as K
-print(K.tensorflow_backend._get_available_gpus())
-print(str(device_lib.list_local_devices()))
+
 
 def headline_to_words(raw_text):
     """
@@ -54,7 +51,7 @@ if __name__ == '__main__':
 
     verbose = 1 if args.verbose else 0
     impl = 2
-    start = time.ctime()
+
     print("Starting:", time.ctime())
 
     ############################################
@@ -84,7 +81,7 @@ if __name__ == '__main__':
     News = read_dataset()
     News.category = News.category.map(
         lambda x: "WORLDPOST" if x == "THE WORLDPOST" else x)
-    News = balance_dataset(News, threshold=500)
+    News = balance_dataset(News, threshold=1000)
     cates = News.groupby('category')
     print("total categories:", cates.ngroups)
     print(cates.size())
@@ -103,7 +100,7 @@ if __name__ == '__main__':
     counts = Counter(words)
     print('Num of different words:', len(set(words)))
     numwords = 1000  # Limit the number of words to use
-    numwords = int(len(set(words))*0.7)
+    numwords = int(len(set(words))*0.6)
     vocab = sorted(counts, key=counts.get, reverse=True)[:numwords]
     vocab_to_int = {word: ii for ii, word in enumerate(vocab, 1)}
 
@@ -139,7 +136,7 @@ if __name__ == '__main__':
     seq_len = max(tweet_len)
     features = np.zeros((len(tweet_ints), seq_len), dtype=int)
 
-    left_padding = False
+    left_padding = True
 
     for i, row in enumerate(tweet_ints):
         if left_padding:
@@ -172,120 +169,114 @@ if __name__ == '__main__':
           "\nTest set: \t\t{}".format(test_y.shape))
 
     ############################################
-    batch_size = 128
+    batch_size = 64
     # Model
-    drop = 0.15
+    drop = 0.2
     rdrop = 0.0
-    l2_regularizer_embeddings = 0.015  # 0.005 # 
+    l2_regularizer_embeddings = 0.0015  # 0.005 # 
     l2_regularizer = 0.0 # 0.0075 #0.
     
     nlayers = 1  # >= 1
-    # RNN = LSTM  # GRU
+    RNN = GRU #SimpleRNN # LSTM  # GRU
     # RNN = GRU
-    for i, RNN in enumerate([GRU]):
-        name = ['GRU'][i]
-        print(name, 'Bidirectional')
-        neurons = 64 # 32  # seq_len  # 64
-        embedding = 8  # 20
 
-        model = Sequential()
-        # model.add(Dropout(0.2))
-        model.add(Embedding(numwords + 1, embedding, input_length=seq_len,
-                            mask_zero=True, 
-                            embeddings_regularizer=regularizers.l2(l2_regularizer_embeddings),
-                            # embeddings_initializer=he_normal(seed=42)
-                            ))
-        model.add(Dropout(0.1))
-        # model.add(SpatialDropout1D(0.2))
-        if nlayers == 1:
-            model.add(Bidirectional(RNN(neurons, implementation=impl, recurrent_dropout=rdrop,
-                        dropout=drop, kernel_regularizer=regularizers.l2(l2_regularizer)
-                        )))
-        else:
-            model.add(Bidirectional(RNN(neurons, implementation=impl,
-                                        recurrent_dropout=rdrop, dropout=drop, return_sequences=True, 
-                                        kernel_regularizer=regularizers.l2(l2_regularizer))))
-            for i in range(1, nlayers - 1):
-                model.add(Bidirectional(RNN(neurons, recurrent_dropout=rdrop, dropout=drop,
-                                            implementation=impl, return_sequences=True, kernel_regularizer=regularizers.l2(l2_regularizer))))
-            model.add(Bidirectional(RNN(neurons, recurrent_dropout=drop, dropout=drop,
-                                        implementation=impl, kernel_regularizer=regularizers.l2(l2_regularizer))))
-        # model.add(Dense(32, activation='selu'))
-        model.add(Dropout(0.2))
-        model.add(Dense(num_classes, activation='softmax'))
+    neurons = 32  # seq_len  # 64
+    embedding = 8  # 20
 
-        ############################################
-        # Training
-        learning_rate = 0.01 # 0.025
-        # learning_rate = [0.005, 0.01,0.001][i]
-        optimizer = SGD(lr=learning_rate, momentum=0.95)
-        optimizer = Adam(lr=learning_rate, beta_1=0.9,
-                        beta_2=0.999, amsgrad=False, decay=1e-4)
-        model.compile(loss='categorical_crossentropy',
-                    optimizer=optimizer, metrics=['accuracy'])
+    model = Sequential()
+    # model.add(Dropout(0.2))
+    model.add(Embedding(numwords + 1, embedding, input_length=seq_len,
+                        mask_zero=True, 
+                        embeddings_regularizer=regularizers.l2(l2_regularizer_embeddings),
+                        # embeddings_initializer=he_normal(seed=42)
+                        ))
+    model.add(Dropout(0.2))
+    # model.add(SpatialDropout1D(0.2))
+    if nlayers == 1:
+        model.add(Bidirectional(RNN(neurons, implementation=impl, recurrent_dropout=rdrop,
+                      dropout=drop, kernel_regularizer=regularizers.l2(l2_regularizer)
+                      )))
+    else:
+        model.add(Bidirectional(RNN(neurons, implementation=impl,
+                                    recurrent_dropout=rdrop, dropout=drop, return_sequences=True, 
+                                    kernel_regularizer=regularizers.l2(l2_regularizer))))
+        for i in range(1, nlayers - 1):
+            model.add(Bidirectional(RNN(neurons, recurrent_dropout=rdrop, dropout=drop,
+                                        implementation=impl, return_sequences=True, kernel_regularizer=regularizers.l2(l2_regularizer))))
+        model.add(Bidirectional(RNN(neurons, recurrent_dropout=drop, dropout=drop,
+                                    implementation=impl, kernel_regularizer=regularizers.l2(l2_regularizer))))
+    # model.add(Dense(32, activation='selu'))
+    model.add(Dropout(0.25))
+    model.add(Dense(num_classes, activation='softmax'))
 
-        epochs = 200
-        # batch_size = 64
+    ############################################
+    # Training
+    learning_rate = 0.005  # 0.025
+    optimizer = SGD(lr=learning_rate, momentum=0.95)
+    optimizer = Adam(lr=learning_rate, beta_1=0.9,
+                     beta_2=0.999, amsgrad=False, decay=1e-5)
+    model.compile(loss='categorical_crossentropy',
+                  optimizer=optimizer, metrics=['accuracy'])
 
-        train_y_c = np_utils.to_categorical(train_y, num_classes)
-        val_y_c = np_utils.to_categorical(val_y, num_classes)
+    epochs = 200
+    # batch_size = 64
 
-        es = EarlyStopping(monitor='val_loss', mode='min', verbose=1,
-                        patience=5, restore_best_weights=True)
-        history = model.fit(train_x, train_y_c,
-                            batch_size=batch_size,
-                            epochs=epochs,
-                            validation_data=(val_x, val_y_c),
-                            callbacks=[es],
-                            # workers=2,
-                            # class_weight=class_weights,
-                            #   verbose=verbose,
-                            )
+    train_y_c = np_utils.to_categorical(train_y, num_classes)
+    val_y_c = np_utils.to_categorical(val_y, num_classes)
 
-        ############################################
-        # Results
+    es = EarlyStopping(monitor='val_loss', mode='min', verbose=1,
+                       patience=10, restore_best_weights=True)
+    history = model.fit(train_x, train_y_c,
+                        batch_size=batch_size,
+                        epochs=epochs,
+                        validation_data=(val_x, val_y_c),
+                        callbacks=[es],
+                        # class_weight=class_weights,
+                        #   verbose=verbose,
+                        )
 
-        test_y_c = np_utils.to_categorical(test_y, num_classes)
-        score, acc = model.evaluate(test_x, test_y_c,
-                                    batch_size=batch_size,)
-        # verbose=verbose)
-        print(name, learning_rate, left_padding)
-        print('Test ACC=', acc)
-        from sklearn.metrics import f1_score
+    ############################################
+    # Results
 
-        test_pred = model.predict_classes(test_x, verbose=verbose)
-        print('F1 score=', f1_score(test_y,test_pred, average='weighted'))
-        np.set_printoptions(threshold=sys.maxsize)
-        print(history.history)
-        print('val_loss:', history.history['val_loss'])
+    test_y_c = np_utils.to_categorical(test_y, num_classes)
+    score, acc = model.evaluate(test_x, test_y_c,
+                                batch_size=batch_size,)
+    # verbose=verbose)
+    print()
+    print('Test ACC=', acc)
 
-        print()
+    test_pred = model.predict_classes(test_x, verbose=verbose)
+    np.set_printoptions(threshold=sys.maxsize)
+    print(history.history)
+    print('val_loss:', history.history['val_loss'])
 
-        print()
-        print('Confusion Matrix')
-        print('-'*20)
-        print(confusion_matrix(test_y, test_pred))
-        print()
-        print('Classification Report')
-        print('-'*40)
-        print(classification_report(test_y, test_pred))
-        print()
-        print("Ending:", time.ctime())
+    print()
 
-        import matplotlib.pyplot as plt
+    print()
+    print('Confusion Matrix')
+    print('-'*20)
+    print(confusion_matrix(test_y, test_pred))
+    print()
+    print('Classification Report')
+    print('-'*40)
+    print(classification_report(test_y, test_pred))
+    print()
+    print("Ending:", time.ctime())
 
-        if 'accuracy' in history.history:
-            key = 'accuracy'
-        else:
-            key = 'acc'
-        plt.plot(history.history[key], label='train acc')
-        plt.plot(history.history[f'val_{key}'], label='validation acc')
-        # Loss plot
-        plt.plot(history.history['loss'], label='train loss')
-        plt.plot(history.history['val_loss'], label='validation loss')
-        plt.title('model loss/accuracy')
-        plt.ylabel('loss/accuracy')
-        plt.xlabel('epoch')
-        plt.legend(loc='upper right')
-        plt.savefig(f'{name}_{left_padding}_acc_loss2.pdf')
-        plt.show()
+    import matplotlib.pyplot as plt
+
+    if 'accuracy' in history.history:
+        key = 'accuracy'
+    else:
+        key = 'acc'
+    plt.plot(history.history[key], label='train acc')
+    plt.plot(history.history[f'val_{key}'], label='validation acc')
+    # Loss plot
+    plt.plot(history.history['loss'], label='train loss')
+    plt.plot(history.history['val_loss'], label='validation loss')
+    plt.title('model loss/accuracy')
+    plt.ylabel('loss/accuracy')
+    plt.xlabel('epoch')
+    plt.legend(loc='upper right')
+    plt.savefig('rnn_acc_loss.pdf')
+    plt.show()

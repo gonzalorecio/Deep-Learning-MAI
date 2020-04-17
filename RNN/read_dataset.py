@@ -23,6 +23,7 @@ from collections import Counter
 f, ax = plt.subplots(1,1, figsize=(12,6))
 
 categories = Counter(df.category.values)
+print(sorted(categories.values())[:10])
 classes = categories.keys()
 sns.countplot(x='category', data=df)
 
