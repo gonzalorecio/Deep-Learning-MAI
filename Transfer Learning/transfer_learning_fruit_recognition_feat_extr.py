@@ -45,7 +45,7 @@ c = 0  # class id
 for filename in classes: 
 	# load image
         path = ROOT_DIR + 'fruit-recognition_reduced/' + filename
-        list_images = os.listdir(path)[:]
+        list_images = os.listdir(path)[:100]
         print(f'{filename}: {len(list_images)}')
         for img in list_images:
                 # img_data = image.imread(ROOT_DIR + 'fruit-recognition_reduced/' + filename + '/' + img)
@@ -55,7 +55,10 @@ for filename in classes:
                 # Scale images to the range [0,1]
                 # img_data = img_data.astype(np.float32)/255.0
                 # img_data = img_data.astype(np.float32) - [123.68, 116.779, 103.939]
-                img_data = preprocess_vgg(img_data.astype(np.float32))
+                
+                # img_data = preprocess_vgg(img_data.astype(np.float32))
+                img_data = preprocess_inception(img_data.astype(np.float32))
+                # img_data = preprocess_resnet(img_data.astype(np.float32))
 
                 # Remove noise
                 # img_data = gaussian(img_data, sigma=1, multichannel=True)
@@ -116,63 +119,25 @@ x_val = x_val.reshape(x_val.shape[0], img_rows, img_cols, channels)
 from keras.models import Sequential, Model
 from keras.layers import Dense, Activation, Conv2D, MaxPooling2D, Flatten, Dropout, SpatialDropout2D
 # new_input = Input(shape=input_shape)
-model_trained = keras.applications.VGG16(
+# model_trained = keras.applications.VGG16(
+model_trained = InceptionV3(
+# model_trained = ResNet50(
 #     weights=None, 
     include_top=False, 
     input_shape=input_shape)
 
-
+# model = model_trained
 # Freeze the layers which you don't want to train. Here I am freezing the first 5 layers.
 print('Number of layers in the trained model:', len(model_trained.layers))
 half = int(len(model_trained.layers)/2)
 for layer in model_trained.layers[:]:
-    layer.trainable = True
+    layer.trainable = False
 
-#Adding custom Layers
+
 x = model_trained.output
-x = Flatten()(x)
-x = Dense(512, activation="relu")(x)
-x = Dropout(0.2)(x)
-x = Dense(256, activation="relu")(x)
-predictions = Dense(num_classes, activation="softmax")(x)
-model = Model(inputs=model_trained.input, output=predictions)
+features = Flatten()(x)
+model = Model(inputs=model_trained.input, output=features)
 
-
-# Model architecture
-# (Conv-Pool)* layers
-# model = Sequential()
-# model.add(Conv2D(64, (5, 5), activation='selu', input_shape=input_shape))
-# model.add(SpatialDropout2D(0.2))
-# model.add(MaxPooling2D(pool_size=(2, 2)))
-# model.add(Conv2D(128, (5, 5), activation='selu'))
-# model.add(SpatialDropout2D(0.2))
-# model.add(MaxPooling2D(pool_size=(2, 2)))
-# model.add(Conv2D(64, (3, 3), activation='selu'))
-# model.add(SpatialDropout2D(0.2))
-# model.add(MaxPooling2D(pool_size=(2, 2)))
-# model.add(Conv2D(32, (3, 3), activation='selu'))
-# model.add(SpatialDropout2D(0.2))
-# model.add(MaxPooling2D(pool_size=(2, 2)))
-
-# model.add(Conv2D(16, (3, 3), activation='selu'))
-# model.add(SpatialDropout2D(0.2))
-# model.add(MaxPooling2D(pool_size=(2, 2)))
-
-# Fully-conected layers
-# model.add(Flatten())
-# model.add(Dense(128, activation='selu'))
-# model.add(Dropout(0.1))
-# model.add(Dense(128, activation='selu'))
-# model.add(Dropout(0.2))
-# model.add(Dense(64, activation='selu'))
-# model.add(Dropout(0.2))
-# model.add(Dense(32, activation='selu'))
-# model.add(Dense(num_classes, activation='softmax'))
-
-#Model visualization
-#We can plot the model by using the ```plot_model``` function. We need to install *pydot, graphviz and pydot-ng*.
-#from keras.util import plot_model
-#plot_model(model, to_file='model.png', show_shapes=true)
 
 #Compile the CNN
 adam = keras.optimizers.Adam(lr=0.0001, beta_1=0.9, beta_2=0.999, amsgrad=False, decay=1e-3)
@@ -186,79 +151,92 @@ print(model.summary())
 es = EarlyStopping(monitor='val_loss', mode='min', verbose=1,
                    patience=10, restore_best_weights=True)
 batch_size = 32
-history = model.fit_generator(train_datagen.flow(x_train, y_train, batch_size=batch_size), 
-                              validation_data=test_datagen.flow(x_val, y_val, batch_size=batch_size),
-                              validation_steps=len(x_val)/batch_size,
-                              steps_per_epoch=len(x_train) / batch_size,
-                              epochs=100,
-                        #       class_weight=class_weights,
-                              workers=2,
-                              callbacks=[es])
+# history = model.fit_generator(train_datagen.flow(x_train, y_train, batch_size=batch_size), 
+#                               validation_data=test_datagen.flow(x_val, y_val, batch_size=batch_size),
+#                               validation_steps=len(x_val)/batch_size,
+#                               steps_per_epoch=len(x_train) / batch_size,
+#                               epochs=1000,
+#                         #       class_weight=class_weights,
+#                               workers=2,
+#                               callbacks=[es])
+
+from sklearn.metrics import classification_report, confusion_matrix
+from sklearn import svm
+import time
+
+
+#Train SVM with the obtained features.
+clf = svm.LinearSVC()
+train_feats = model.predict(x_train)
+test_feats = model.predict(x_test)
+print(train_feats.shape)
+print(np.argmax(y_train, axis=1).shape)
+print(y_train.shape)
+
+start = time.time()
+clf.fit(X = train_feats, y = np.argmax(y_train, axis=1))
+end = time.time()
+print("SVM training time (s):", end - start)
+print('Done training SVM on extracted features of training set')
+
+
+#Test SVM with the test set.
+predicted_labels = clf.predict(test_feats)
+print('Done testing SVM on extracted features of test set')
+
+#Print results
+print(classification_report(np.argmax(y_test,axis=1), predicted_labels))
+print(confusion_matrix(np.argmax(y_test,axis=1), predicted_labels))
+from sklearn.metrics import f1_score, accuracy_score
+print('f1 score macro', f1_score(np.argmax(y_test, axis=1), predicted_labels, average='macro'))
+print('accuracy score', accuracy_score(np.argmax(y_test, axis=1), predicted_labels))
+
 
 # Results and visualization
 import matplotlib
 matplotlib.use('Agg')
 
 #Evaluate the model with test set
-score = model.evaluate(x_test, y_test, verbose=1)
-print('test loss:', score[0])
-print('test accuracy:', score[1])
+# score = model.evaluate(x_test, y_test, verbose=1)
+# print('test loss:', score[0])
+# print('test accuracy:', score[1])
 
-##Store Plots
-#Accuracy plot
-print(history.history.keys())
-# Depending on the tensorflow version the key changes
-if 'accuracy' in history.history:
-        key = 'accuracy'
-else:
-        key = 'acc'
-plt.plot(history.history[key], label='train acc')
-plt.plot(history.history[f'val_{key}'], label='validation acc')
-#Loss plot
-plt.plot(history.history['loss'], label='train loss' )
-plt.plot(history.history['val_loss'], label='validation loss')
-plt.title('model loss/accuracy')
-plt.ylabel('loss/accuracy')
-plt.xlabel('epoch')
-plt.legend(loc='upper right')
-plt.savefig('cnn_acc_loss.pdf')
+# ##Store Plots
+# #Accuracy plot
+# print(history.history.keys())
+# # Depending on the tensorflow version the key changes
+# if 'accuracy' in history.history:
+#         key = 'accuracy'
+# else:
+#         key = 'acc'
+# plt.plot(history.history[key], label='train acc')
+# plt.plot(history.history[f'val_{key}'], label='validation acc')
+# #Loss plot
+# plt.plot(history.history['loss'], label='train loss' )
+# plt.plot(history.history['val_loss'], label='validation loss')
+# plt.title('model loss/accuracy')
+# plt.ylabel('loss/accuracy')
+# plt.xlabel('epoch')
+# plt.legend(loc='upper right')
+# plt.savefig('cnn_acc_loss.pdf')
 
-#Confusion Matrix
-from sklearn.metrics import classification_report, confusion_matrix
-#Compute probabilities
-Y_pred = model.predict(x_test)
-#Assign most probable label
-y_pred = np.argmax(Y_pred, axis=1)
-#Plot statistics
-print( 'Analysis of results' )
-print(classes)
-print(classification_report(np.argmax(y_test,axis=1), y_pred, target_names=classes))
-print(confusion_matrix(np.argmax(y_test,axis=1), y_pred))
-plt.close()
 
-from sklearn.metrics import f1_score
-print('f1 score macro', f1_score(np.argmax(y_test, axis=1), y_pred, average='macro'))
+
 
 # Plot confussion matrix
 import seaborn as sns
 fig, ax = plt.subplots(1, figsize=(12,12))
-cm = confusion_matrix(np.argmax(y_test,axis=1), y_pred)
-sns.heatmap(cm, annot=True, ax = ax, fmt="d")  #annot=True to annotate cells
+cm = confusion_matrix(np.argmax(y_test,axis=1), predicted_labels)
+sns.heatmap(cm, annot=True, ax = ax, cmap="Blues", fmt="d")  #annot=True to annotate cells
 # labels, title and ticks of the confussion matrix
 ax.set_xlabel('Predicted labels');ax.set_ylabel('True labels')
 ax.set_title('Confusion Matrix')
 ax.xaxis.set_ticklabels(classes, rotation=45)
 ax.yaxis.set_ticklabels(classes, rotation=0)
-plt.savefig('confussion_matrix.pdf')
+plt.savefig('confussion_matrix_SVM.pdf')
 
 
-#Saving model and weights
-model_json = model.to_json()
-with open(f'model_{round(score[1], 4)}.json', 'w') as json_file:
-        json_file.write(model_json)
-weights_file = "weights_"+str(round(score[1], 4))+".hdf5"
-model.save_weights(weights_file,overwrite=True)
-os.mkdir(f'exectution_{round(score[1], 4)}')
+
 
 #Loading model and weights
 # from keras.models import model_from_json
